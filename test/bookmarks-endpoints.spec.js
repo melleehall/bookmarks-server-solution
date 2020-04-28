@@ -19,7 +19,7 @@ describe('Bookmarks Endpoints', () => {
 
   afterEach('cleanup', () => db('bookmarks').truncate())
 
-  describe(`Unauthorized requests`, () => {
+  describe.skip(`Unauthorized requests`, () => {
     const testBookmarks = fixtures.makeBookmarksArray()
 
     beforeEach('insert bookmarks', () => {
@@ -194,6 +194,87 @@ describe('Bookmarks Endpoints', () => {
           )
       })
     })
+  })
+
+  describe.only(`PATCH /bookmarks/:id`, () => {
+    context(`Given no bookmarks`, () => {
+      it(`responds with 404`, () => {
+        const bookmarkId = 123456
+        return supertest(app)
+          .patch(`/bookmarks/${bookmarkId}`)
+          .expect(404, { error: { message: `Bookmark Not Found` }})
+      })
+    })
+
+    context('Given there are bookmarks in the database', () => {
+      const testBookmarks = fixtures.makeBookmarksArray()
+
+      beforeEach('insert bookmarks', () => {
+        return db
+          .into('bookmarks')
+          .insert(testBookmarks)
+      })
+
+      it('responds with 204 and udpates the bookmark', () => {
+        const idToUpdate = 2
+        const updateBookmark = {
+          title: 'updated bookmark title',
+          url: 'https://www.newurl.com',
+          description: 'updated description!',
+          rating: 3
+        }
+        const expectedBookmark = {
+          ...testBookmarks[idToUpdate - 1],
+          ...updateBookmark
+        }
+        return supertest(app)
+          .patch(`/bookmarks/${idToUpdate}`)
+          .send(updateBookmark)
+          .expect(204)
+          .then(res => 
+            supertest(app)
+              .get(`/bookmarks/${idToUpdate}`)
+              .expect(expectedBookmark)  
+          )
+      })
+
+      it(`responds with 400 when no required fields supplied`, () => {
+        const idToUpdate = 2
+        return supertest(app)
+          .patch(`/bookmarks/${idToUpdate}`)
+          .send({ irrelevantField: 'foo' })
+          .expect(400, {
+            error: {
+              message: `Request body must contain either 'title', 'url', 'description', or 'rating'.`
+            }
+          })
+      })
+
+      it(`responds with 204 when updating only a subset of fields`, () => {
+        const idToUpdate = 2
+        const updateBookmark = {
+          title: 'updated title for subset test'
+        }
+        const expectedBookmark = {
+          ...testBookmarks[idToUpdate - 1],
+          ...updateBookmark
+        }
+
+        return supertest(app)
+          .patch(`/bookmarks/${idToUpdate}`)
+          .send({
+            ...updateBookmark,
+            fieldToIgnore: 'should not be in GET response'
+          })
+          .expect(204)
+          .then(res => 
+            supertest(app)
+              .get(`/bookmarks/${idToUpdate}`)  
+              .expect(expectedBookmark)
+          )
+      })
+    })
+
   })
 
   describe('POST /bookmarks', () => {
